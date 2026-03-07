@@ -172,9 +172,10 @@ class MusicSender:
             logger.warning(f"【{song.name}】下载失败，尝试直接发送 URL")
             if await send_by_url():
                 return True
-            await event.send(
-                event.plain_result(f"【{song.name}】音频文件下载和发送均失败")
-            )
+            if event.is_private_chat():
+                await event.send(
+                    event.plain_result(f"【{song.name}】音频文件下载和发送均失败")
+                )
             return False
 
         try:
@@ -186,10 +187,10 @@ class MusicSender:
             logger.warning(f"【{song.name}】本地文件发送失败: {e}，尝试直接发送 URL")
             if await send_by_url():
                 return True
-
-            await event.send(
-                event.plain_result(f"【{song.name}】音频文件发送失败: {e}")
-            )
+            if event.is_private_chat():
+                await event.send(
+                    event.plain_result(f"【{song.name}】音频文件发送失败：{e}")
+                )
             return False
 
     async def send_text(
