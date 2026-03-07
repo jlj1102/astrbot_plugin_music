@@ -81,8 +81,7 @@ class MusicSender:
             # 没有评论
             return False
         try:
-            content = random.choice(song.comments).get("content")
-            content.insert(0, f"💬随机评论：")
+            content = "随机评论：" + random.choice(song.comments).get("content")
             await event.send(event.plain_result(content))
             return True
         except Exception:
