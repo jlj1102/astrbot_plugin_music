@@ -137,7 +137,7 @@ class MusicSender:
             await event.send(event.plain_result(f"【{song.name}】音频获取失败"))
             return False
         try:
-            logger.debug(f"正在发送【{song.name}】音频: {song.audio_url}")
+            logger.info(f"正在发送【{song.name}】音频: {song.audio_url}")
             seg = Record.fromURL(song.audio_url)
             await event.send(event.chain_result([seg]))
             return True
@@ -272,7 +272,7 @@ class MusicSender:
             try:
                 ok = await sender(event, player, song)
             except Exception as e:
-                logger.error(f"{mode} 发送异常: {e}")
+                logger.warning(f"{mode} 发送异常: {e}")
                 ok = False
 
             if ok:
@@ -282,7 +282,7 @@ class MusicSender:
             else:
                 logger.debug(f"{mode} 发送失败，尝试下一种")
 
-        if not sent:
+        if not sent and event.is_private_chat():
             await event.send(event.plain_result("歌曲发送失败"))
 
         # 附加内容不影响主流程
