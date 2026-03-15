@@ -77,7 +77,7 @@ class NetEaseMusicNodeJS(BaseMusicPlayer):
     async def fetch_extra(self, song: Song) -> Song:
         try:
             result = await self._request(
-                url=f"{self.cfg.nodejs_base_url}/song/url/v1?id={song.id}&level=exhigh",
+                url=f"{self.cfg.nodejs_base_url}/song/url/?id={song.id}",
                 method="GET",
             )
             if not isinstance(result, dict):
