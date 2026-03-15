@@ -64,25 +64,37 @@ class Downloader:
             return None
 
     async def download_song_curl(self, url: str) -> Path | None:
-        """下载歌曲，返回保存路径（curl，用于 NodeJS 模式）"""
+        """下载歌曲，返回保存路径（curl via tmux，用于 NodeJS 模式）"""
         song_uuid = uuid.uuid4().hex
         file_path = self.songs_dir / f"{song_uuid}.mp3"
+        session_name = f"dl_{song_uuid[:8]}"
+        done_flag = self.songs_dir / f"{song_uuid}.done"
+        fail_flag = self.songs_dir / f"{song_uuid}.fail"
 
-        cmd = [
-            "curl",
-            "-L",
-            "--silent",
-            "--show-error",
-            "--fail",
-            "--max-time", "120",
-            "--output", str(file_path),
-            url,
+        # 3-second countdown before downloading
+        for i in range(3, 0, -1):
+            logger.info(f"下载倒计时：{i}s ...")
+            await asyncio.sleep(1)
+
+        # Build the shell command that runs inside tmux:
+        # curl downloads the file, then writes a flag file on success/failure
+        shell_cmd = (
+            f"curl -L --silent --show-error --fail --max-time 120 "
+            f"--output '{file_path}' '{url}' "
+            f"&& touch '{done_flag}' || touch '{fail_flag}'"
+        )
+
+        tmux_cmd = [
+            "tmux", "new-session", "-d",
+            "-s", session_name,
+            shell_cmd,
         ]
 
-        logger.debug(f"开始下载歌曲(curl) URL={url}")
+        logger.debug(f"开始下载歌曲(tmux+curl) session={session_name} URL={url}")
         try:
+            # Start the tmux session
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
+                *tmux_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -90,11 +102,30 @@ class Downloader:
 
             if proc.returncode != 0:
                 logger.error(
-                    f"歌曲下载失败，curl 退出码 {proc.returncode}："
-                    f"{stderr.decode(errors='replace').strip()}"
+                    f"tmux 启动失败：{stderr.decode(errors='replace').strip()}"
+                )
+                return None
+
+            # Poll for either flag file (max 120s)
+            for _ in range(240):
+                await asyncio.sleep(0.5)
+                if done_flag.exists():
+                    break
+                if fail_flag.exists():
+                    logger.error("curl 下载失败（fail flag）")
+                    file_path.unlink(missing_ok=True)
+                    return None
+            else:
+                logger.error("下载超时（120s），强制关闭 tmux session")
+                await asyncio.create_subprocess_exec(
+                    "tmux", "kill-session", "-t", session_name
                 )
                 file_path.unlink(missing_ok=True)
                 return None
+
+            # Cleanup flag files
+            done_flag.unlink(missing_ok=True)
+            fail_flag.unlink(missing_ok=True)
 
             actual_size = file_path.stat().st_size
             logger.debug(f"歌曲下载完成，大小：{actual_size} 字节，路径：{file_path}")
@@ -108,8 +139,9 @@ class Downloader:
 
             return file_path
 
-        except FileNotFoundError:
-            logger.error("curl 未安装，请先安装 curl")
+        except FileNotFoundError as e:
+            missing = "tmux" if "tmux" in str(e) else "curl"
+            logger.error(f"{missing} 未安装，请先安装 {missing}")
             file_path.unlink(missing_ok=True)
             return None
         except Exception as e:
