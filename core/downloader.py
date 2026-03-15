@@ -47,9 +47,24 @@ class Downloader:
         self.songs_dir.mkdir(parents=True, exist_ok=True)
         logger.debug(f"缓存目录已重建：{self.songs_dir}")
 
-    @staticmethod
-    def _origin_referer(url: str) -> dict:
-        """Derive Origin and Referer from the download URL."""
+    # CDN hostname → required Referer
+    _REFERER_MAP = {
+        "126.net": "https://music.163.com/",
+        "163.com": "https://music.163.com/",
+        "music.163.com": "https://music.163.com/",
+        "qq.com": "https://y.qq.com/",
+        "kugou.com": "https://www.kugou.com/",
+        "kuwo.cn": "https://www.kuwo.cn/",
+    }
+
+    @classmethod
+    def _origin_referer(cls, url: str) -> dict:
+        """Return the correct Origin/Referer for the CDN serving this URL."""
+        host = urlparse(url).netloc  # e.g. m701.music.126.net
+        for domain, referer in cls._REFERER_MAP.items():
+            if host.endswith(domain):
+                return {"Origin": referer.rstrip("/"), "Referer": referer}
+        # Generic fallback: derive from URL origin
         parsed = urlparse(url)
         origin = f"{parsed.scheme}://{parsed.netloc}"
         return {"Origin": origin, "Referer": origin + "/"}
