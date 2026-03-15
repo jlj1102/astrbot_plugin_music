@@ -78,7 +78,6 @@ class MusicSender:
         if not song.comments:
             await player.fetch_comments(song)
         if not song.comments:
-            # 没有评论
             return False
         try:
             content = "随机评论：\n" + random.choice(song.comments).get("content")
@@ -155,11 +154,14 @@ class MusicSender:
             await event.send(event.plain_result(f"【{song.name}】音频获取失败"))
             return False
 
-        file_path = await self.downloader.download_song(song.audio_url)
+        # NodeJS player needs curl to bypass CDN restrictions
+        if isinstance(player, NetEaseMusicNodeJS):
+            file_path = await self.downloader.download_song_curl(song.audio_url)
+        else:
+            file_path = await self.downloader.download_song(song.audio_url)
 
         async def send_by_url():
             try:
-                # 默认使用 mp3 后缀
                 file_name_url = f"{song.name}_{song.artists}.mp3"
                 if song.audio_url:
                     seg_url = File(name=file_name_url, url=song.audio_url)
@@ -299,7 +301,6 @@ class MusicSender:
         if not sent and event.is_private_chat():
             await event.send(event.plain_result("歌曲发送失败"))
 
-        # 附加内容不影响主流程
         if sent and self.cfg.enable_comments:
             await self.send_comment(event, player, song)
 
